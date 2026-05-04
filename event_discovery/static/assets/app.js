@@ -3,7 +3,6 @@ const CAL_LIMIT = 500;
 
 const els = {
   btnAddSource: document.getElementById("btnAddSource"),
-  btnAutoDiscoverSource: document.getElementById("btnAutoDiscoverSource"),
   btnRunFullCrawl: document.getElementById("btnRunFullCrawl"),
   siteConfigHeading: document.getElementById("siteConfigHeading"),
   siteConfigKeyReadonly: document.getElementById("siteConfigKeyReadonly"),
@@ -52,12 +51,6 @@ const els = {
   siteConfigForm: document.getElementById("siteConfigForm"),
   siteConfigSourceKey: document.getElementById("siteConfigSourceKey"),
   siteConfigLabel: document.getElementById("siteConfigLabel"),
-  siteConfigDiscoveryMeta: document.getElementById("siteConfigDiscoveryMeta"),
-  siteConfigDiscoverySummary: document.getElementById("siteConfigDiscoverySummary"),
-  siteConfigDiscoveryEvidenceWrap: document.getElementById("siteConfigDiscoveryEvidenceWrap"),
-  siteConfigDiscoveryEvidence: document.getElementById("siteConfigDiscoveryEvidence"),
-  siteConfigDiscoveryCaveatsWrap: document.getElementById("siteConfigDiscoveryCaveatsWrap"),
-  siteConfigDiscoveryCaveats: document.getElementById("siteConfigDiscoveryCaveats"),
   siteConfigTypeSelect: document.getElementById("siteConfigTypeSelect"),
   siteConfigTypeSelectWrap: document.getElementById("siteConfigTypeSelectWrap"),
   siteConfigTypeCustomWrap: document.getElementById("siteConfigTypeCustomWrap"),
@@ -89,13 +82,15 @@ const els = {
   siteDeleteCancel: document.getElementById("siteDeleteCancel"),
   siteDeleteConfirm: document.getElementById("siteDeleteConfirm"),
   sitesEmptyHint: document.getElementById("sitesEmptyHint"),
-  sourceDiscoverDialog: document.getElementById("sourceDiscoverDialog"),
-  sourceDiscoverForm: document.getElementById("sourceDiscoverForm"),
-  sourceDiscoverUrl: document.getElementById("sourceDiscoverUrl"),
-  sourceDiscoverUseLlm: document.getElementById("sourceDiscoverUseLlm"),
-  sourceDiscoverError: document.getElementById("sourceDiscoverError"),
-  sourceDiscoverCancel: document.getElementById("sourceDiscoverCancel"),
-  sourceDiscoverSubmit: document.getElementById("sourceDiscoverSubmit"),
+  addSourceQuickDialog: document.getElementById("addSourceQuickDialog"),
+  addSourceQuickForm: document.getElementById("addSourceQuickForm"),
+  addSourceQuickName: document.getElementById("addSourceQuickName"),
+  addSourceQuickUrl: document.getElementById("addSourceQuickUrl"),
+  addSourceQuickUseLlm: document.getElementById("addSourceQuickUseLlm"),
+  addSourceQuickError: document.getElementById("addSourceQuickError"),
+  addSourceQuickCancel: document.getElementById("addSourceQuickCancel"),
+  addSourceQuickSubmit: document.getElementById("addSourceQuickSubmit"),
+  addSourceQuickAdvanced: document.getElementById("addSourceQuickAdvanced"),
 };
 
 let config = { read_only: false, advanced_ui: false };
@@ -849,170 +844,72 @@ function setSiteConfigError(msg) {
   els.siteConfigError.textContent = msg;
 }
 
-function hideSiteConfigDiscoveryMeta() {
-  if (!els.siteConfigDiscoveryMeta) return;
-  els.siteConfigDiscoveryMeta.hidden = true;
-  if (els.siteConfigDiscoveryEvidenceWrap) els.siteConfigDiscoveryEvidenceWrap.hidden = true;
-  if (els.siteConfigDiscoveryCaveatsWrap) els.siteConfigDiscoveryCaveatsWrap.hidden = true;
-}
-
-/** @param {object} proposal API /api/source-discovery response */
-function showSiteConfigDiscoveryMeta(proposal) {
-  if (!els.siteConfigDiscoveryMeta || !proposal) return;
-  els.siteConfigDiscoveryMeta.hidden = false;
-  if (els.siteConfigDiscoverySummary) {
-    const bits = [
-      `method: ${proposal.method}`,
-      `confidence: ${proposal.confidence}`,
-      proposal.save_ready ? "ready to save" : "review fields before saving",
-    ];
-    if (proposal.validation_error) bits.push(`validation: ${proposal.validation_error}`);
-    els.siteConfigDiscoverySummary.textContent = bits.join(" · ");
-  }
-  const fillList = (ul, items) => {
-    if (!ul) return;
-    ul.innerHTML = "";
-    for (const x of items) {
-      const li = document.createElement("li");
-      li.textContent = x;
-      ul.appendChild(li);
-    }
-  };
-  const ev = Array.isArray(proposal.evidence) ? proposal.evidence : [];
-  const cav = Array.isArray(proposal.caveats) ? proposal.caveats : [];
-  if (ev.length && els.siteConfigDiscoveryEvidenceWrap && els.siteConfigDiscoveryEvidence) {
-    els.siteConfigDiscoveryEvidenceWrap.hidden = false;
-    fillList(els.siteConfigDiscoveryEvidence, ev);
-  } else if (els.siteConfigDiscoveryEvidenceWrap) els.siteConfigDiscoveryEvidenceWrap.hidden = true;
-  if (cav.length && els.siteConfigDiscoveryCaveatsWrap && els.siteConfigDiscoveryCaveats) {
-    els.siteConfigDiscoveryCaveatsWrap.hidden = false;
-    fillList(els.siteConfigDiscoveryCaveats, cav);
-  } else if (els.siteConfigDiscoveryCaveatsWrap) els.siteConfigDiscoveryCaveatsWrap.hidden = true;
-}
-
-function setSourceDiscoverError(msg) {
-  if (!els.sourceDiscoverError) return;
+function setAddSourceQuickError(msg) {
+  if (!els.addSourceQuickError) return;
   if (!msg) {
-    els.sourceDiscoverError.hidden = true;
-    els.sourceDiscoverError.textContent = "";
+    els.addSourceQuickError.hidden = true;
+    els.addSourceQuickError.textContent = "";
     return;
   }
-  els.sourceDiscoverError.hidden = false;
-  els.sourceDiscoverError.textContent = msg;
+  els.addSourceQuickError.hidden = false;
+  els.addSourceQuickError.textContent = msg;
 }
 
-function closeSourceDiscoverDialog() {
-  setSourceDiscoverError("");
-  els.sourceDiscoverDialog?.close();
+function closeAddSourceQuickDialog() {
+  setAddSourceQuickError("");
+  els.addSourceQuickDialog?.close();
 }
 
-async function openAutoDiscoverDialog() {
-  if (!writesAllowed() || !els.sourceDiscoverDialog) return;
-  setSourceDiscoverError("");
-  if (els.sourceDiscoverUrl) els.sourceDiscoverUrl.value = "";
-  if (els.sourceDiscoverUseLlm) els.sourceDiscoverUseLlm.checked = true;
-  els.sourceDiscoverDialog.showModal();
-  requestAnimationFrame(() => els.sourceDiscoverUrl?.focus());
+async function openAddSourceQuickDialog() {
+  if (!writesAllowed() || !els.addSourceQuickDialog) return;
+  setAddSourceQuickError("");
+  if (els.addSourceQuickName) els.addSourceQuickName.value = "";
+  if (els.addSourceQuickUrl) els.addSourceQuickUrl.value = "";
+  if (els.addSourceQuickUseLlm) els.addSourceQuickUseLlm.checked = true;
+  els.addSourceQuickDialog.showModal();
+  requestAnimationFrame(() => els.addSourceQuickName?.focus());
 }
 
-async function submitAutoDiscover(ev) {
+async function submitAddSourceQuick(ev) {
   ev.preventDefault();
-  if (!writesAllowed() || !els.sourceDiscoverUrl) return;
-  setSourceDiscoverError("");
-  const url = els.sourceDiscoverUrl.value.trim();
-  if (!url) {
-    setSourceDiscoverError("Enter a URL.");
+  if (!writesAllowed()) return;
+  setAddSourceQuickError("");
+  const name = (els.addSourceQuickName && els.addSourceQuickName.value.trim()) || "";
+  const url = (els.addSourceQuickUrl && els.addSourceQuickUrl.value.trim()) || "";
+  if (!name) {
+    setAddSourceQuickError("Enter a name.");
     return;
   }
-  const use_llm = els.sourceDiscoverUseLlm ? !!els.sourceDiscoverUseLlm.checked : true;
+  if (!url) {
+    setAddSourceQuickError("Enter a calendar or events page URL.");
+    return;
+  }
+  const use_llm = els.addSourceQuickUseLlm ? !!els.addSourceQuickUseLlm.checked : true;
   try {
-    if (els.sourceDiscoverSubmit) els.sourceDiscoverSubmit.disabled = true;
-    const proposal = await fetchJson("/api/source-discovery", {
+    if (els.addSourceQuickSubmit) els.addSourceQuickSubmit.disabled = true;
+    const res = await fetchJson("/api/websites/quick-add", {
       method: "POST",
-      body: JSON.stringify({ url, use_llm }),
+      body: JSON.stringify({ url, name, use_llm }),
     });
-    closeSourceDiscoverDialog();
-    await openAddSourceDialogFromDiscovery(proposal);
+    const label = res.website?.source_label || name;
+    closeAddSourceQuickDialog();
+    setStatus(`Added “${label}” (starts disabled). Use Re-check on that row to pull events.`);
+    await loadSites({ quietStatus: true });
   } catch (e) {
-    setSourceDiscoverError(e.message || "Detection failed.");
+    setAddSourceQuickError(e.message || "Could not add source.");
   } finally {
-    if (els.sourceDiscoverSubmit) els.sourceDiscoverSubmit.disabled = false;
+    if (els.addSourceQuickSubmit) els.addSourceQuickSubmit.disabled = false;
   }
 }
 
-/** @param {object} proposal from /api/source-discovery */
-async function openAddSourceDialogFromDiscovery(proposal) {
-  if (!writesAllowed() || !els.siteConfigDialog) return;
-  try {
-    await ensureWebsiteSourceTypes();
-  } catch (e) {
-    setSiteConfigError(e.message || "Could not load source types.");
-    return;
-  }
-  hideSiteConfigDiscoveryMeta();
-  siteConfigIsCreate = true;
-  siteConfigEditingId = null;
-  siteConfigOpener = els.btnAutoDiscoverSource || null;
-  if (els.siteConfigHeading) els.siteConfigHeading.textContent = "Add source";
-  if (els.siteConfigKeyReadonly) els.siteConfigKeyReadonly.hidden = true;
-  if (els.siteConfigKeyCreateWrap) els.siteConfigKeyCreateWrap.hidden = false;
-  if (els.siteConfigNewKey) els.siteConfigNewKey.value = "";
-
-  try {
-    accountDiscoveryDefaults = await fetchJson("/api/discovery-settings");
-  } catch (e) {
-    setSiteConfigError(e.message || "Could not load default discovery settings.");
-    return;
-  }
-  fillSitePrefsFromEffective(accountDiscoveryDefaults);
-
-  let siteType;
-  /** @type {Record<string, unknown>} */
-  let cfg;
-  if (proposal.recommended_type === "unknown") {
-    siteType = proposal.fallback_type || "json_ld_events";
-    cfg = { ...(proposal.fallback_config || {}) };
-    if (!cfg.page_url && proposal.discovered_url) cfg.page_url = proposal.discovered_url;
-  } else {
-    siteType = proposal.recommended_type;
-    cfg = { ...proposal.suggested_config };
-  }
-
-  if (els.siteConfigNewKey) els.siteConfigNewKey.value = proposal.source_key || "";
-  els.siteConfigLabel.value = proposal.source_label || "";
-
-  fillTypeSelect(siteType);
-  if (els.siteConfigTypeSelect && els.siteConfigTypeSelect.value === "__custom__") {
-    els.siteConfigDynamicSimple.innerHTML = "";
-    els.siteConfigDynamicAdvanced.innerHTML = "";
-    els.siteConfigJsonExpert.value = JSON.stringify(cfg, null, 2);
-    els.siteConfigTypeCustomWrap.hidden = false;
-    els.siteConfigTypeSelectWrap.hidden = false;
-    els.siteConfigTypeSelect.required = false;
-    els.siteConfigTypeCustom.required = true;
-    els.siteConfigTypeCustom.value = siteType || "";
-  } else {
-    const effectiveType = els.siteConfigTypeSelect
-      ? els.siteConfigTypeSelect.value
-      : siteType;
-    renderSiteDynamicFields(effectiveType);
-    fillDynamicFields(effectiveType, cfg);
-    els.siteConfigJsonExpert.value = "{}";
-  }
-
-  if (els.siteConfigExpertBlock) els.siteConfigExpertBlock.style.display = config.advanced_ui ? "" : "none";
-  if (els.siteConfigAdvancedBlock) els.siteConfigAdvancedBlock.open = false;
-  if (els.siteConfigPrefsBlock) els.siteConfigPrefsBlock.open = false;
-  if (els.siteConfigExpertBlock) els.siteConfigExpertBlock.open = false;
-  setSiteConfigError("");
-  showSiteConfigDiscoveryMeta(proposal);
-  els.siteConfigDialog.showModal();
-  requestAnimationFrame(() => els.siteConfigNewKey?.focus());
+async function openAddSourceQuickAdvanced() {
+  if (!writesAllowed()) return;
+  closeAddSourceQuickDialog();
+  await openAddSourceDialog();
 }
 
 async function openSiteConfigDialog(w, opener) {
   if (!writesAllowed() || !els.siteConfigDialog) return;
-  hideSiteConfigDiscoveryMeta();
   try {
     await ensureWebsiteSourceTypes();
   } catch (e) {
@@ -1066,7 +963,6 @@ async function openSiteConfigDialog(w, opener) {
 }
 
 function closeSiteConfigDialog() {
-  hideSiteConfigDiscoveryMeta();
   siteConfigEditingId = null;
   siteConfigIsCreate = false;
   if (els.siteConfigKeyReadonly) els.siteConfigKeyReadonly.hidden = false;
@@ -1082,7 +978,6 @@ function closeSiteConfigDialog() {
 
 async function openAddSourceDialog() {
   if (!writesAllowed() || !els.siteConfigDialog) return;
-  hideSiteConfigDiscoveryMeta();
   try {
     await ensureWebsiteSourceTypes();
   } catch (e) {
@@ -1241,22 +1136,22 @@ if (els.sitesUncheckAll) {
   els.sitesUncheckAll.addEventListener("click", () => void sitesBulkEnabled(false));
 }
 if (els.btnAddSource) {
-  els.btnAddSource.addEventListener("click", () => void openAddSourceDialog());
+  els.btnAddSource.addEventListener("click", () => void openAddSourceQuickDialog());
 }
-if (els.btnAutoDiscoverSource) {
-  els.btnAutoDiscoverSource.addEventListener("click", () => void openAutoDiscoverDialog());
+if (els.addSourceQuickForm) {
+  els.addSourceQuickForm.addEventListener("submit", (ev) => void submitAddSourceQuick(ev));
 }
-if (els.sourceDiscoverForm) {
-  els.sourceDiscoverForm.addEventListener("submit", (ev) => void submitAutoDiscover(ev));
+if (els.addSourceQuickCancel) {
+  els.addSourceQuickCancel.addEventListener("click", () => closeAddSourceQuickDialog());
 }
-if (els.sourceDiscoverCancel) {
-  els.sourceDiscoverCancel.addEventListener("click", () => closeSourceDiscoverDialog());
-}
-if (els.sourceDiscoverDialog) {
-  els.sourceDiscoverDialog.addEventListener("cancel", (ev) => {
+if (els.addSourceQuickDialog) {
+  els.addSourceQuickDialog.addEventListener("cancel", (ev) => {
     ev.preventDefault();
-    closeSourceDiscoverDialog();
+    closeAddSourceQuickDialog();
   });
+}
+if (els.addSourceQuickAdvanced) {
+  els.addSourceQuickAdvanced.addEventListener("click", () => void openAddSourceQuickAdvanced());
 }
 if (els.btnRunFullCrawl) {
   els.btnRunFullCrawl.addEventListener("click", () => void runFullCrawl());

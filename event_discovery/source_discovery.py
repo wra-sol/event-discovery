@@ -524,5 +524,46 @@ def discover_source_proposal(
     )
 
 
+def pick_type_and_config_for_website(proposal: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """
+    Choose (site_type, config) for persisting a website after discovery.
+
+    Prefers a validated primary suggestion, then fallback (e.g. json_ld_events + page_url),
+    then a re-validation of the primary type with its suggested_config.
+
+    Raises ValueError with a human-readable message if nothing validates.
+    """
+    if proposal.get("save_ready") and proposal.get("recommended_type") not in (
+        None,
+        "",
+        "unknown",
+    ):
+        return str(proposal["recommended_type"]), dict(proposal.get("suggested_config") or {})
+
+    fb_t = proposal.get("fallback_type")
+    fb_c = proposal.get("fallback_config")
+    if isinstance(fb_t, str) and fb_t.strip() and isinstance(fb_c, dict):
+        try:
+            validate_website_type_and_config(fb_t.strip(), dict(fb_c))
+            return fb_t.strip(), dict(fb_c)
+        except ValueError:
+            pass
+
+    rt = proposal.get("recommended_type")
+    sc = proposal.get("suggested_config")
+    if isinstance(rt, str) and rt.strip() and rt != "unknown" and isinstance(sc, dict):
+        try:
+            validate_website_type_and_config(rt.strip(), dict(sc))
+            return rt.strip(), dict(sc)
+        except ValueError:
+            pass
+
+    caveats = proposal.get("caveats") or []
+    msg = " ".join(str(c) for c in caveats if str(c).strip()) or (
+        "Could not determine a supported crawl strategy for this URL."
+    )
+    raise ValueError(msg)
+
+
 # Backwards compatibility for tests importing ALLOWED_TYPES
 ALLOWED_TYPES = DISCOVERY_ALLOWED_TYPES

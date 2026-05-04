@@ -3,10 +3,13 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
+from event_discovery.repository import allocate_unique_source_key, create_website, open_connection
+from event_discovery.schema_migrations import apply_migrations
 from event_discovery.source_discovery import (
     _heuristic_discover,
     discover_source_proposal,
     finalize_proposal,
+    pick_type_and_config_for_website,
 )
 
 
@@ -124,6 +127,66 @@ class TestFinalizeProposal(unittest.TestCase):
         self.assertEqual(out["recommended_type"], "unknown")
         self.assertEqual(out["fallback_type"], "json_ld_events")
         self.assertEqual(out["fallback_config"]["page_url"], "https://u.test/p")
+
+
+class TestPickTypeAndConfig(unittest.TestCase):
+    def test_save_ready_primary(self) -> None:
+        p = finalize_proposal(
+            {
+                "recommended_type": "json_ld_events",
+                "confidence": 0.9,
+                "suggested_config": {"page_url": "https://a.test/x"},
+                "evidence": [],
+                "caveats": [],
+            },
+            discovered_url="https://a.test/x",
+            html_for_title="",
+            method="heuristic",
+        )
+        st, cfg = pick_type_and_config_for_website(p)
+        self.assertEqual(st, "json_ld_events")
+        self.assertEqual(cfg["page_url"], "https://a.test/x")
+
+    def test_fallback_when_unknown(self) -> None:
+        p = finalize_proposal(
+            {
+                "recommended_type": "unknown",
+                "confidence": 0.0,
+                "suggested_config": {},
+                "evidence": [],
+                "caveats": ["no match"],
+            },
+            discovered_url="https://b.test/y",
+            html_for_title="",
+            method="unknown",
+        )
+        st, cfg = pick_type_and_config_for_website(p)
+        self.assertEqual(st, "json_ld_events")
+        self.assertEqual(cfg["page_url"], "https://b.test/y")
+
+
+class TestAllocateUniqueSourceKey(unittest.TestCase):
+    def test_collision_suffix(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "d.db"
+            apply_migrations(db)
+            conn = open_connection(db)
+            try:
+                create_website(
+                    conn,
+                    source_key="my-source",
+                    site_type="json_ld_events",
+                    config={"page_url": "https://x.test/"},
+                    source_label="A",
+                    enabled=False,
+                )
+                k = allocate_unique_source_key(conn, "My Source")
+                self.assertEqual(k, "my-source-2")
+            finally:
+                conn.close()
 
 
 class TestDiscoverSourceProposal(unittest.TestCase):

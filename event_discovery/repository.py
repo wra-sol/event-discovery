@@ -13,6 +13,7 @@ from typing import Any
 
 from .dedupe import merge_discovered_event_group
 from .models import DiscoveredEvent, dedupe_key_from_url_title
+from .source_validation import slugify_source_key
 
 log = logging.getLogger(__name__)
 
@@ -956,6 +957,27 @@ def open_connection(db_path: Path) -> sqlite3.Connection:
     except sqlite3.Error:
         pass
     return conn
+
+
+def allocate_unique_source_key(conn: sqlite3.Connection, base: str) -> str:
+    """
+    Return a slugified source_key based on `base` that is not already used in websites.
+    Appends -2, -3, … as needed.
+    """
+    key = slugify_source_key(base)
+    if not key:
+        key = "source"
+    candidate = key
+    n = 2
+    cur = conn.cursor()
+    while True:
+        cur.execute("SELECT 1 FROM websites WHERE source_key = ?", (candidate,))
+        if cur.fetchone() is None:
+            return candidate
+        candidate = f"{key}-{n}"
+        n += 1
+        if n > 10_000:
+            raise ValueError("Could not allocate a unique source id")
 
 
 def create_website(

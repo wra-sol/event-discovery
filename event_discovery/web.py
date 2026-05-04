@@ -46,6 +46,7 @@ from .paths import (
 from .pipeline import load_config, migrate_database_only, run
 from .repository import (
     EventListFilters,
+    allocate_unique_source_key,
     count_discovered_events,
     create_website,
     delete_website,
@@ -65,7 +66,7 @@ from .repository import (
     set_all_websites_enabled,
     update_event_review,
 )
-from .source_discovery import discover_source_proposal
+from .source_discovery import discover_source_proposal, pick_type_and_config_for_website
 from .source_validation import validate_website_type_and_config
 from .website_config_schema import website_source_types_payload
 
@@ -528,6 +529,27 @@ class SourceDiscoveryResponse(BaseModel):
     fallback_config: dict[str, Any] | None = None
 
 
+class WebsiteQuickAddBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=1, max_length=2048)
+    name: str = Field(min_length=1, max_length=200)
+    use_llm: bool = True
+
+
+class DiscoverySummaryBlock(BaseModel):
+    method: str
+    recommended_type: str
+    save_ready: bool
+    evidence: list[str]
+    caveats: list[str]
+
+
+class WebsiteQuickAddResponse(BaseModel):
+    website: WebsiteRow
+    discovery: DiscoverySummaryBlock
+
+
 class CrawlJobAccepted(BaseModel):
     job_id: int
     status: str = "queued"
@@ -975,6 +997,65 @@ def api_source_discovery(
             detail=f"Could not complete discovery: {e}",
         ) from e
     return SourceDiscoveryResponse.model_validate(out)
+
+
+@app.post("/api/websites/quick-add", response_model=WebsiteQuickAddResponse)
+def api_website_quick_add(
+    request: Request,
+    body: WebsiteQuickAddBody,
+    conn: Annotated[Connection, Depends(get_db)],
+    user: Annotated[dict[str, Any], Depends(require_user)],
+) -> WebsiteQuickAddResponse:
+    """
+    Add a source from a display name and URL only: run discovery (rules, then optional AI),
+    then insert a disabled website row ready for Re-check.
+    """
+    _ = user
+    _require_writes_allowed(request)
+    name = body.name.strip()
+    url = body.url.strip()
+    proposal: dict[str, Any] = {}
+    try:
+        proposal = discover_source_proposal(
+            url,
+            use_llm=body.use_llm,
+            source_label=name,
+        )
+        site_type, cfg = pick_type_and_config_for_website(proposal)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except Exception as e:
+        log.warning("quick-add discovery failed: %s", e)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not complete discovery: {e}",
+        ) from e
+    try:
+        key = allocate_unique_source_key(conn, name)
+        wid = create_website(
+            conn,
+            source_key=key,
+            site_type=site_type,
+            config=cfg,
+            source_label=name,
+            enabled=False,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    rows = list_websites(conn)
+    for r in rows:
+        if int(r["id"]) == wid:
+            return WebsiteQuickAddResponse(
+                website=WebsiteRow.model_validate(r),
+                discovery=DiscoverySummaryBlock(
+                    method=str(proposal.get("method") or "unknown"),
+                    recommended_type=str(proposal.get("recommended_type") or "unknown"),
+                    save_ready=bool(proposal.get("save_ready")),
+                    evidence=list(proposal.get("evidence") or []),
+                    caveats=list(proposal.get("caveats") or []),
+                ),
+            )
+    raise HTTPException(status_code=500, detail="Could not load new source")
 
 
 @app.get("/api/websites", response_model=list[WebsiteRow])

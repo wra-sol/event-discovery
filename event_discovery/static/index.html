@@ -32,7 +32,7 @@
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=3" />
+    <link rel="stylesheet" href="/assets/styles.css?v=4" />
   </head>
   <body>
     <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -98,17 +98,17 @@
       <main id="main-content" tabindex="-1">
       <section id="panelSites" class="panel" role="tabpanel" aria-labelledby="navSites" hidden>
         <p class="panel-hint">
-          Drag rows to change crawl order. <strong>Edit…</strong> sets URLs, source type, and optional
-          per-source overrides. <strong>Re-check</strong> crawls one site only. <strong>Remove</strong> drops
-          the site from this account (optional event cleanup). <strong>Last activity</strong> is the latest
-          event timestamp for that site.
+          <strong>Add source</strong> only needs a name and URL; crawl settings are detected automatically (rules,
+          then AI when the server is configured). <strong>Edit…</strong> is for fine-tuning. <strong>Re-check</strong>
+          crawls one site only. <strong>Remove</strong> drops the site from this account (optional event cleanup).
+          <strong>Last activity</strong> is the latest event timestamp for that site.
         </p>
 
         <div id="sitesEmptyHint" class="sites-empty-hint card-like" hidden>
           <p>
-            <strong>No sources yet.</strong> Use <strong>Add source</strong> to add your first feed, then
-            <strong>Edit…</strong> to double-check URLs. When you are ready, use <strong>Re-check</strong> on a row
-            to pull events (this runs in the background).
+            <strong>No sources yet.</strong> Use <strong>Add source</strong> with a short name and your calendar URL;
+            we configure the crawl for you. Then use <strong>Re-check</strong> on a row to pull events (runs in the
+            background).
           </p>
         </div>
 
@@ -196,8 +196,8 @@
                 apply.
               </li>
               <li>
-                <strong>Fetch</strong> — Each site’s URLs are read using the handler type you set under
-                Edit….
+                <strong>Fetch</strong> — Each site’s URLs are read using the detected or edited handler type
+                (Add source picks this automatically; Edit… can change it).
               </li>
               <li>
                 <strong>Detail pass</strong> — If enabled, we may open individual event pages to fill
@@ -216,9 +216,6 @@
 
         <div class="sites-toolbar" role="group" aria-label="Site list actions">
           <button type="button" class="btn" id="btnAddSource">Add source</button>
-          <button type="button" class="btn secondary" id="btnAutoDiscoverSource">
-            Auto-detect source
-          </button>
           <button type="button" class="btn secondary" id="btnRunFullCrawl">Run full crawl</button>
           <button type="button" class="btn secondary" id="sitesCheckAll">Check all</button>
           <button type="button" class="btn secondary" id="sitesUncheckAll">Uncheck all</button>
@@ -354,33 +351,51 @@
       </main>
     </div>
 
-    <dialog class="site-config-dialog" id="sourceDiscoverDialog" aria-labelledby="sourceDiscoverHeading">
-      <form id="sourceDiscoverForm" class="site-config-form">
-        <h2 id="sourceDiscoverHeading" class="site-config-heading">Auto-detect source</h2>
+    <dialog class="site-config-dialog" id="addSourceQuickDialog" aria-labelledby="addSourceQuickHeading">
+      <form id="addSourceQuickForm" class="site-config-form">
+        <h2 id="addSourceQuickHeading" class="site-config-heading">Add source</h2>
         <p class="field-hint">
-          Paste an events or calendar page URL. Built-in rules run first; optional AI runs only if those don’t match.
+          Enter a display name and the events or calendar page URL. We detect the crawl strategy automatically (site
+          rules first, then AI if needed and configured on the server).
         </p>
         <label class="field field-grow">
-          <span>Page URL</span>
+          <span>Name</span>
+          <input
+            type="text"
+            id="addSourceQuickName"
+            name="quick_source_name"
+            required
+            maxlength="200"
+            autocomplete="off"
+            placeholder="e.g. City library events"
+          />
+        </label>
+        <label class="field field-grow">
+          <span>Calendar or events page URL</span>
           <input
             type="url"
-            id="sourceDiscoverUrl"
-            name="discover_url"
+            id="addSourceQuickUrl"
+            name="quick_source_url"
             required
             autocomplete="off"
             placeholder="https://example.org/events"
           />
         </label>
         <label class="review-toggle discovery-prefs-toggle">
-          <input type="checkbox" id="sourceDiscoverUseLlm" checked />
+          <input type="checkbox" id="addSourceQuickUseLlm" checked />
           <span>
-            Use AI when rules don’t match (server needs OPENAI_API_KEY or LLM_API_KEY)
+            Use AI when automatic rules don’t match (needs OPENAI_API_KEY or LLM_API_KEY on the server)
           </span>
         </label>
-        <p id="sourceDiscoverError" class="site-config-error" role="alert" hidden></p>
+        <p class="field-hint">
+          <button type="button" class="btn-linklike" id="addSourceQuickAdvanced">
+            Advanced: add with full editor (source id, type, JSON)…
+          </button>
+        </p>
+        <p id="addSourceQuickError" class="site-config-error" role="alert" hidden></p>
         <div class="site-config-actions">
-          <button type="button" class="btn secondary" id="sourceDiscoverCancel">Cancel</button>
-          <button type="submit" class="btn" id="sourceDiscoverSubmit">Detect</button>
+          <button type="button" class="btn secondary" id="addSourceQuickCancel">Cancel</button>
+          <button type="submit" class="btn" id="addSourceQuickSubmit">Add source</button>
         </div>
       </form>
     </dialog>
@@ -416,20 +431,6 @@
           <span>Display name</span>
           <input type="text" id="siteConfigLabel" name="source_label" autocomplete="off" />
         </label>
-        <div id="siteConfigDiscoveryMeta" class="site-config-discovery-meta" hidden>
-          <p class="field-hint">
-            <strong>Detection</strong> —
-            <span id="siteConfigDiscoverySummary"></span>
-          </p>
-          <div id="siteConfigDiscoveryEvidenceWrap" hidden>
-            <p class="field-hint site-config-discovery-sub">Evidence</p>
-            <ul id="siteConfigDiscoveryEvidence" class="site-config-discovery-list"></ul>
-          </div>
-          <div id="siteConfigDiscoveryCaveatsWrap" hidden>
-            <p class="field-hint site-config-discovery-sub">Notes</p>
-            <ul id="siteConfigDiscoveryCaveats" class="site-config-discovery-list"></ul>
-          </div>
-        </div>
         <label class="field field-grow" id="siteConfigTypeSelectWrap">
           <span>Source type</span>
           <select id="siteConfigTypeSelect" name="type_select" required></select>
@@ -527,6 +528,6 @@
     </dialog>
 
     <script src="/assets/theme.js?v=3"></script>
-    <script src="/assets/app.js?v=4" type="module"></script>
+    <script src="/assets/app.js?v=5" type="module"></script>
   </body>
 </html>
