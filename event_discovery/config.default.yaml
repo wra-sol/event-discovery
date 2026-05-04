@@ -1,0 +1,71 @@
+# Default discovery config. Override path: EVENT_DISCOVERY_CONFIG
+#
+# Canonical runtime config lives in SQLite after the first migrate or crawl:
+#   discovery_settings — keys `http`, `scoring`, `enrichment` (JSON)
+#   websites — scrape sources (source_key, type, config_json, …)
+# This file does not ship preconfigured sites. See config.example.yaml for a
+# Burlington-area source set, or define `sources:` in your overlay / UI sync.
+# Push YAML site changes into the DB with:
+#   python -m event_discovery sync-websites [--config your-overlay.yaml]
+#
+# Per-source `type` values include:
+#   tribe_rest | json_ld_events | burlington_events_ldjson | spaces_fragment |
+#   eventbrite_listing | looklocal_page
+# Optional per-source fields: source_label (DiscoveredEvent.source in DB), enabled,
+# preferences (optional { http, scoring, enrichment } merged over account defaults).
+# Optional top-level source_order: [key, ...] for stable run order (then any keys not listed).
+
+http:
+  user_agent: "FrankDomenicEventDiscovery/0.1 (+local; Burlington municipal campaign event triage)"
+  delay_seconds: 0.75
+  timeout_seconds: 45
+
+# After each source batch, fetch event detail pages (robots.txt-respecting) to fill missing
+# start/end/venue from JSON-LD and common meta tags (covers Eventbrite and other listing-only sources).
+# Set enabled: false to skip. max_urls caps detail GETs per discovery run (default 100).
+enrichment:
+  enabled: true
+  max_urls: 100
+
+scoring:
+  horizon_days: 120
+  positive_keywords:
+    - Burlington
+    - Halton
+    - community
+    - festival
+    - farmers market
+    - neighbourhood
+    - neighborhood
+    - town hall
+    - ward
+    - library
+    - park
+    - clean up
+    - arts
+    - culture
+  ward_keywords:
+    - Ward 6
+    - ward 6
+    - Headon
+    - Headon Forest
+    - Alton
+    - Millcroft
+  negative_keywords:
+    - bootcamp
+    - certification exam
+    - CompTIA
+    - corporate training
+    - Hayward Training
+    - professional training
+    - workshop in Mississauga
+    - workshop in Hamilton
+    - Regus
+    - 1 Day Session
+    - 2-Day Session
+
+sources: {}
+
+database:
+  # SQLite file path = OUTPUT_DIR / filename unless DISCOVERY_DB_PATH is set (absolute path).
+  filename: discovery.db

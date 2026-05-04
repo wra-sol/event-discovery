@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Discovered events</title>
+    <script>
+      (function () {
+        try {
+          var stored = window.localStorage.getItem("theme");
+          var mode =
+            stored === "light" || stored === "dark" || stored === "auto" ? stored : "auto";
+          var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var resolved = mode === "auto" ? (prefersDark ? "dark" : "light") : mode;
+          var root = document.documentElement;
+          root.classList.remove("light", "dark");
+          root.classList.add(resolved);
+          if (mode === "auto") {
+            root.removeAttribute("data-theme");
+          } else {
+            root.setAttribute("data-theme", mode);
+          }
+          root.style.colorScheme = resolved;
+        } catch (e) {
+          /* ignore */
+        }
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css?v=3" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <div class="page">
+      <header class="masthead">
+        <div class="masthead-inner">
+          <p class="eyebrow">Burlington-area discovery</p>
+          <h1>Event discovery</h1>
+          <p class="lede">
+            Manage crawl sources, browse events by date, and triage listings. Review flags stay in the
+            database; scores refresh on each crawl.
+          </p>
+        </div>
+        <div class="masthead-tools" role="group" aria-label="Appearance">
+          <span class="theme-toggle-label" aria-hidden="true">Theme</span>
+          <button type="button" class="theme-toggle" id="themeToggle">Auto</button>
+        </div>
+      </header>
+
+      <nav class="app-nav" role="tablist" aria-label="Workspace sections">
+        <button
+          type="button"
+          class="nav-tab"
+          role="tab"
+          id="navSites"
+          data-panel="sites"
+          aria-controls="panelSites"
+          aria-selected="false"
+          tabindex="-1"
+        >
+          Sites
+        </button>
+        <button
+          type="button"
+          class="nav-tab"
+          role="tab"
+          id="navCalendar"
+          data-panel="calendar"
+          aria-controls="panelCalendar"
+          aria-selected="false"
+          tabindex="-1"
+        >
+          Calendar
+        </button>
+        <button
+          type="button"
+          class="nav-tab nav-tab-active"
+          role="tab"
+          id="navReview"
+          data-panel="review"
+          aria-controls="panelReview"
+          aria-selected="true"
+          tabindex="0"
+        >
+          Review
+        </button>
+      </nav>
+
+      <div class="toolbar-meta global-meta" role="region" aria-label="Status messages">
+        <p id="status" class="status" role="status" aria-live="polite" aria-atomic="true"></p>
+      </div>
+
+      <main id="main-content" tabindex="-1">
+      <section id="panelSites" class="panel" role="tabpanel" aria-labelledby="navSites" hidden>
+        <p class="panel-hint">
+          Drag rows to change crawl order. <strong>Edit…</strong> sets URLs, source type, and optional
+          per-source overrides. <strong>Re-check</strong> crawls one site only. <strong>Remove</strong> drops
+          the site from this account (optional event cleanup). <strong>Last activity</strong> is the latest
+          event timestamp for that site.
+        </p>
+
+        <div id="sitesEmptyHint" class="sites-empty-hint card-like" hidden>
+          <p>
+            <strong>No sources yet.</strong> Use <strong>Add source</strong> to add your first feed, then
+            <strong>Edit…</strong> to double-check URLs. When you are ready, use <strong>Re-check</strong> on a row
+            to pull events (this runs in the background).
+          </p>
+        </div>
+
+        <form id="discoveryPrefsForm" class="discovery-prefs card-like">
+          <h2 class="discovery-prefs-heading">Defaults for all sources</h2>
+          <p class="discovery-prefs-lede">
+            These apply to every site unless you set different values under <strong>Edit…</strong> →
+            <strong>This source only</strong>. Keywords match anywhere in the event text (title, venue,
+            snippet, URL); matching ignores case.
+          </p>
+          <label class="field field-grow">
+            <span>Boost when the text mentions…</span>
+            <input
+              type="text"
+              id="discPositive"
+              name="positive"
+              autocomplete="off"
+              placeholder="e.g. Burlington, festival, library (comma-separated)"
+            />
+          </label>
+          <label class="field field-grow">
+            <span>Extra boost for local places…</span>
+            <input
+              type="text"
+              id="discWard"
+              name="ward"
+              autocomplete="off"
+              placeholder="e.g. Ward 6, neighbourhood name (comma-separated)"
+            />
+          </label>
+          <label class="field field-grow">
+            <span>Downrank when the text mentions…</span>
+            <input
+              type="text"
+              id="discNegative"
+              name="negative"
+              autocomplete="off"
+              placeholder="e.g. training, certification (comma-separated)"
+            />
+          </label>
+          <label class="field field-narrow">
+            <span>Ignore events farther out than (days)</span>
+            <input type="number" id="discHorizon" name="horizon" min="0" step="1" />
+          </label>
+          <label class="review-toggle discovery-prefs-toggle">
+            <input type="checkbox" id="discEnrichEnabled" name="enrich_enabled" />
+            <span>Fill in missing dates and venue when possible (opens event pages respectfully)</span>
+          </label>
+          <p id="discoveryPrefsError" class="site-config-error" role="alert" hidden></p>
+          <div class="discovery-prefs-actions">
+            <button type="submit" class="btn" id="discoveryPrefsSave">Save preferences</button>
+          </div>
+
+          <details class="discovery-prefs-advanced">
+            <summary>Advanced crawl settings</summary>
+            <div class="discovery-prefs-advanced-inner">
+              <label class="field field-narrow">
+                <span>Delay between requests (seconds)</span>
+                <input type="number" id="discDelay" min="0.05" step="0.05" />
+              </label>
+              <label class="field field-narrow">
+                <span>Request timeout (seconds)</span>
+                <input type="number" id="discTimeout" min="1" step="1" />
+              </label>
+              <label class="field field-grow">
+                <span>User-Agent string</span>
+                <input type="text" id="discUserAgent" autocomplete="off" />
+              </label>
+              <label class="field field-narrow">
+                <span>Max detail pages per run</span>
+                <input type="number" id="discMaxDetail" min="0" step="1" />
+              </label>
+            </div>
+          </details>
+
+          <details class="discovery-prefs-learn">
+            <summary>How discovery works</summary>
+            <ol class="discovery-prefs-learn-list">
+              <li>
+                <strong>Sources</strong> — Enabled sites in this list (top to bottom) are crawled in that
+                order.
+              </li>
+              <li>
+                <strong>Politeness</strong> — Each source checks robots.txt; the User-Agent and delay above
+                apply.
+              </li>
+              <li>
+                <strong>Fetch</strong> — Each site’s URLs are read using the handler type you set under
+                Edit….
+              </li>
+              <li>
+                <strong>Detail pass</strong> — If enabled, we may open individual event pages to fill
+                missing dates or venue (still respects robots).
+              </li>
+              <li>
+                <strong>Dedupe</strong> — Overlaps across sources are merged automatically.
+              </li>
+              <li>
+                <strong>Score</strong> — Keyword and date rules (defaults or per-source overrides) set
+                relevance; results are sorted by score.
+              </li>
+            </ol>
+          </details>
+        </form>
+
+        <div class="sites-toolbar" role="group" aria-label="Site list actions">
+          <button type="button" class="btn" id="btnAddSource">Add source</button>
+          <button type="button" class="btn secondary" id="btnRunFullCrawl">Run full crawl</button>
+          <button type="button" class="btn secondary" id="sitesCheckAll">Check all</button>
+          <button type="button" class="btn secondary" id="sitesUncheckAll">Uncheck all</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="events sites-table">
+            <thead>
+              <tr>
+                <th class="col-drag" scope="col"><span class="sr-only">Reorder</span></th>
+                <th scope="col">Source</th>
+                <th class="col-type" scope="col">Type</th>
+                <th class="col-enabled" scope="col">Enabled</th>
+                <th class="col-activity" scope="col">Last activity</th>
+                <th class="col-config" scope="col">Config</th>
+                <th class="col-recheck" scope="col">Re-check</th>
+                <th class="col-remove" scope="col">Remove</th>
+              </tr>
+            </thead>
+            <tbody id="sitesTbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="panelCalendar" class="panel" role="tabpanel" aria-labelledby="navCalendar" hidden>
+        <p class="panel-hint">
+          Only events <strong>accepted</strong> in Review (not rejected) appear here. Up to 500 dated events load per
+          month; if you hit the limit, narrow with Review filters first.
+        </p>
+        <div class="calendar-toolbar">
+          <button type="button" class="btn secondary cal-nav-btn" id="calPrev" aria-label="Previous month">
+            <span aria-hidden="true">←</span>
+          </button>
+          <h2 class="calendar-title" id="calTitle">Month</h2>
+          <button type="button" class="btn secondary cal-nav-btn" id="calNext" aria-label="Next month">
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+        <p id="calStatus" class="cal-status" role="status" aria-live="polite"></p>
+        <div
+          class="calendar-grid"
+          id="calGrid"
+          aria-label="Confirmed events by day"
+          aria-labelledby="calTitle"
+        ></div>
+        <div class="calendar-detail" id="calDetail" hidden>
+          <h3 class="calendar-detail-title" id="calDetailTitle" tabindex="-1"></h3>
+          <ul class="calendar-detail-list" id="calDetailList"></ul>
+        </div>
+      </section>
+
+      <section id="panelReview" class="panel" role="tabpanel" aria-labelledby="navReview">
+        <p class="panel-hint">
+          <strong>Accepted</strong> events appear in Calendar. <strong>Rejected</strong> stays out of the calendar
+          but remains in this list for reference. Use filters to focus on what needs attention.
+        </p>
+        <section class="toolbar" aria-label="Event filters">
+          <div class="toolbar-row">
+            <label class="field">
+              <span>Search</span>
+              <input type="search" id="q" placeholder="Title, venue, URL…" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span>Source</span>
+              <select id="source">
+                <option value="">All sources</option>
+              </select>
+            </label>
+            <label class="field field-narrow">
+              <span>Min score</span>
+              <input type="number" id="minScore" step="0.1" min="0" placeholder="0" />
+            </label>
+            <label class="field">
+              <span>Triage</span>
+              <select id="reviewed">
+                <option value="">Any</option>
+                <option value="pending">Pending</option>
+                <option value="accepted">Accepted</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </label>
+            <div class="field field-checkbox-row">
+              <span class="field-legend" id="when-filter-label">When</span>
+              <label class="checkbox-inline">
+                <input type="checkbox" id="showPastEvents" aria-labelledby="when-filter-label" />
+                <span>Show past events</span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <div class="table-wrap">
+          <table class="events">
+            <thead>
+              <tr>
+                <th class="col-review" scope="col">
+                  <button type="button" class="th-sort" data-sort="reviewed">
+                    Triage<span class="th-sort-ind" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th class="col-score" scope="col">
+                  <button type="button" class="th-sort" data-sort="relevance">
+                    Score<span class="th-sort-ind" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th class="col-when" scope="col">
+                  <button type="button" class="th-sort" data-sort="start_at">
+                    When<span class="th-sort-ind" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th scope="col">
+                  <button type="button" class="th-sort" data-sort="title">
+                    Event<span class="th-sort-ind" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th class="col-source" scope="col">
+                  <button type="button" class="th-sort" data-sort="source">
+                    Source<span class="th-sort-ind" aria-hidden="true"></span>
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+
+        <nav class="pager" aria-label="Review list pagination">
+          <button type="button" class="btn secondary" id="prevPage" disabled>Previous</button>
+          <span id="pageInfo" class="page-info" aria-live="polite" aria-atomic="true"></span>
+          <button type="button" class="btn secondary" id="nextPage" disabled>Next</button>
+        </nav>
+      </section>
+      </main>
+    </div>
+
+    <dialog class="site-config-dialog site-delete-dialog" id="siteDeleteDialog" aria-labelledby="siteDeleteHeading">
+      <div class="site-delete-inner">
+        <h2 id="siteDeleteHeading" class="site-config-heading">Remove site</h2>
+        <p id="siteDeleteLead" class="site-delete-lead"></p>
+        <div id="siteDeleteEventsWrap" class="site-delete-events-wrap" hidden>
+          <label class="review-toggle site-delete-checkbox">
+            <input type="checkbox" id="siteDeleteEvents" />
+            <span id="siteDeleteEventsHint"></span>
+          </label>
+        </div>
+        <div class="site-config-actions">
+          <button type="button" class="btn secondary" id="siteDeleteCancel">Cancel</button>
+          <button type="button" class="btn danger" id="siteDeleteConfirm">Remove site</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog class="site-config-dialog" id="siteConfigDialog" aria-labelledby="siteConfigHeading">
+      <form id="siteConfigForm" class="site-config-form">
+        <h2 id="siteConfigHeading" class="site-config-heading">Edit site</h2>
+        <p class="site-config-meta" id="siteConfigKeyReadonly">
+          Source id <code id="siteConfigSourceKey"></code>
+        </p>
+        <label class="field field-grow" id="siteConfigKeyCreateWrap" hidden>
+          <span>Source id (short name, letters and numbers)</span>
+          <input type="text" id="siteConfigNewKey" name="new_source_key" autocomplete="off" />
+        </label>
+        <label class="field field-grow">
+          <span>Display name</span>
+          <input type="text" id="siteConfigLabel" name="source_label" autocomplete="off" />
+        </label>
+        <label class="field field-grow" id="siteConfigTypeSelectWrap">
+          <span>Source type</span>
+          <select id="siteConfigTypeSelect" name="type_select" required></select>
+        </label>
+        <label class="field field-grow" id="siteConfigTypeCustomWrap" hidden>
+          <span>Custom type id</span>
+          <input type="text" id="siteConfigTypeCustom" name="type_custom" autocomplete="off" />
+        </label>
+        <div id="siteConfigDynamicSimple" class="site-config-dynamic"></div>
+        <details class="site-config-advanced" id="siteConfigAdvancedBlock">
+          <summary>More options</summary>
+          <div id="siteConfigDynamicAdvanced" class="site-config-dynamic"></div>
+        </details>
+        <details class="site-config-prefs" id="siteConfigPrefsBlock">
+          <summary>This source only (optional)</summary>
+          <p class="field-hint">
+            Values here override <strong>Defaults for all sources</strong> for this site only. Use
+            <strong>Reset to defaults</strong> to clear overrides.
+          </p>
+          <label class="field field-grow">
+            <span>Boost when the text mentions…</span>
+            <input
+              type="text"
+              id="sitePrefPositive"
+              name="site_pref_positive"
+              autocomplete="off"
+              placeholder="comma-separated keywords"
+            />
+          </label>
+          <label class="field field-grow">
+            <span>Extra boost for local places…</span>
+            <input
+              type="text"
+              id="sitePrefWard"
+              name="site_pref_ward"
+              autocomplete="off"
+              placeholder="comma-separated"
+            />
+          </label>
+          <label class="field field-grow">
+            <span>Downrank when the text mentions…</span>
+            <input
+              type="text"
+              id="sitePrefNegative"
+              name="site_pref_negative"
+              autocomplete="off"
+              placeholder="comma-separated"
+            />
+          </label>
+          <label class="field field-narrow">
+            <span>Ignore events farther out than (days)</span>
+            <input type="number" id="sitePrefHorizon" min="0" step="1" />
+          </label>
+          <label class="review-toggle discovery-prefs-toggle">
+            <input type="checkbox" id="sitePrefEnrichEnabled" />
+            <span>Fill in missing dates and venue when possible</span>
+          </label>
+          <label class="field field-narrow">
+            <span>Max detail pages per run</span>
+            <input type="number" id="sitePrefMaxDetail" min="0" step="1" />
+          </label>
+          <p class="field-hint site-pref-subheading">Connection (this source)</p>
+          <label class="field field-narrow">
+            <span>Delay between requests (seconds)</span>
+            <input type="number" id="sitePrefDelay" min="0.05" step="0.05" />
+          </label>
+          <label class="field field-narrow">
+            <span>Request timeout (seconds)</span>
+            <input type="number" id="sitePrefTimeout" min="1" step="1" />
+          </label>
+          <label class="field field-grow">
+            <span>User-Agent string</span>
+            <input type="text" id="sitePrefUserAgent" autocomplete="off" />
+          </label>
+          <p class="site-config-prefs-actions">
+            <button type="button" class="btn secondary" id="sitePrefReset">Reset to defaults</button>
+          </p>
+        </details>
+        <details class="site-config-expert" id="siteConfigExpertBlock">
+          <summary>Expert: extra JSON keys</summary>
+          <p class="field-hint site-config-expert-hint">
+            Only keys not shown above. Must be a JSON object; leave <code>{}</code> if none.
+          </p>
+          <label class="field field-grow">
+            <span class="sr-only">Extra JSON</span>
+            <textarea id="siteConfigJsonExpert" name="config_expert" rows="8" spellcheck="false"></textarea>
+          </label>
+        </details>
+        <p id="siteConfigError" class="site-config-error" role="alert" hidden></p>
+        <div class="site-config-actions">
+          <button type="button" class="btn secondary" id="siteConfigCancel">Cancel</button>
+          <button type="submit" class="btn" id="siteConfigSave">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="/assets/theme.js?v=3"></script>
+    <script src="/assets/app.js?v=3" type="module"></script>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+# Web UI + API (default service). Optional: set DATABASE_URL for PostgreSQL-backed auth
+# (see README). Discovery/event SQLite still uses the attached volume per account.
+# Use a Railway volume (not Dockerfile VOLUME):
+# https://docs.railway.com/reference/volumes
+# requiredMountPath must match the volume mount path so deploys fail fast without it.
+# docker-entrypoint.sh maps RAILWAY_VOLUME_MOUNT_PATH to OUTPUT_DIR and DISCOVERY_DB_PATH.
+#
+# Scheduled full crawls: a second Railway service + cron gets its own volume, so it
+# will not see the web service's SQLite file. Options: Postgres/Turso for shared DB;
+# or run discovery from the web process (e.g. external cron calling your API); or
+# only use per-site recheck from the UI against the web service's DB.
+
+# RAILPACK avoids Railway Dockerfile / BuildKit cache-id validation issues; uses uv + uv.lock.
+# Local Docker builds: see Dockerfile (optional).
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "python -m event_discovery.web"
+healthcheckPath = "/health"
+healthcheckTimeout = 60
+requiredMountPath = "/data"

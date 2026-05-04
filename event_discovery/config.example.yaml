@@ -1,0 +1,58 @@
+# Example scrape sources (Burlington-area). Not loaded automatically.
+# Merge with defaults via:
+#   EVENT_DISCOVERY_CONFIG=/path/to/this/file
+#   or: uv run python -m event_discovery --config event_discovery/config.example.yaml
+# Then run sync-websites if you use the SQLite websites table.
+#
+# Removing a site: delete one whole block below (from the # --- line through the
+# blank line before the next # ---). Crawl order matches top-to-bottom order here.
+# Optional: add top-level source_order: [key, ...] only if you need a different order.
+# Optional per-source `preferences` (http, scoring, enrichment) deep-merge over account
+# defaults from discovery_settings / YAML. See docs/calendar/README.md (event discovery).
+
+sources:
+
+  # --- tourism ---
+  tourism:
+    enabled: true
+    type: tribe_rest
+    rest_url: "https://tourismburlington.ca/wp-json/tribe/events/v1/events"
+    per_page: 50
+    max_pages: 4
+
+  # --- downtown ---
+  downtown:
+    enabled: true
+    type: tribe_rest
+    rest_url: "https://burlingtondowntown.ca/wp-json/tribe/events/v1/events"
+    per_page: 50
+    max_pages: 4
+
+  # --- city_events ---
+  city_events:
+    enabled: true
+    # json_ld_events is an alias (same as burlington_events_ldjson); use for non-Burlington JSON-LD Event pages.
+    type: burlington_events_ldjson
+    page_url: "https://events.burlington.ca/"
+
+  # --- spaces ---
+  spaces:
+    enabled: true
+    type: spaces_fragment
+    base_url: "https://burlington.spaces.ca"
+    endpoint: "/posts/eventsbysite"
+    max_pages: 8
+
+  # --- eventbrite ---
+  eventbrite:
+    enabled: true
+    type: eventbrite_listing
+    listing_urls:
+      - "https://www.eventbrite.ca/d/canada--burlington/events--this-week/"
+      - "https://www.eventbrite.ca/d/canada--burlington/events--today/"
+
+  # --- looklocal ---
+  looklocal:
+    enabled: true
+    type: looklocal_page
+    page_url: "https://looklocal.ca/local-community-events/"

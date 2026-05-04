@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "event-discovery"
+version = "0.1.0"
+description = "Burlington public event discovery (crawl, SQLite, optional web UI)"
+requires-python = ">=3.10"
+dependencies = [
+    "httpx==0.28.1",
+    "beautifulsoup4==4.12.3",
+    "PyYAML==6.0.2",
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+    "pydantic==2.10.4",
+    "bcrypt==4.2.1",
+    "itsdangerous>=2.0",
+    "psycopg[binary]==3.2.3",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["event_discovery"]
+exclude = ["/event_discovery/tests/**"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/event_discovery/tests/**"]
+
+[tool.pytest.ini_options]
+testpaths = ["event_discovery/tests"]

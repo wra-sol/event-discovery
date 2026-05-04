@@ -1,0 +1,16 @@
+{
+  "events": [
+    {
+      "title": "Sample Concert",
+      "url": "https://example.test/event/sample-concert/",
+      "start_date": "2026-05-15 19:00:00",
+      "end_date": "2026-05-15 21:00:00",
+      "description": "<p>Live music for <strong>residents</strong>.</p>",
+      "venue": {
+        "venue": "Town Hall",
+        "address": "1 Main St",
+        "city": "Burlington"
+      }
+    }
+  ]
+}
