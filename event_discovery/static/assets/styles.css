@@ -1092,6 +1092,24 @@ textarea:focus:not(:focus-visible) {
   color: var(--danger-soft);
 }
 
+.site-config-discovery-meta {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: var(--chip-bg);
+  border: 1px solid var(--chip-line);
+}
+
+.site-config-discovery-sub {
+  margin: 0.5rem 0 0.25rem;
+}
+
+.site-config-discovery-list {
+  margin: 0 0 0.5rem 1.25rem;
+  padding: 0;
+  font-size: 0.9rem;
+}
+
 .site-config-actions {
   display: flex;
   justify-content: flex-end;

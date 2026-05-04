@@ -7,6 +7,7 @@ from event_discovery.llm_source_discovery import (
     format_yaml_suggestion,
     parse_discovery_response,
 )
+from event_discovery.source_discovery import finalize_proposal
 
 
 class TestLlmDiscoveryParse(unittest.TestCase):
@@ -53,6 +54,23 @@ class TestLlmDiscoveryParse(unittest.TestCase):
         self.assertIn("my_venue:", y)
         self.assertIn("json_ld_events", y)
         self.assertIn("page_url", y)
+
+    def test_finalize_sets_source_key_and_label(self) -> None:
+        out = finalize_proposal(
+            {
+                "recommended_type": "json_ld_events",
+                "confidence": 0.8,
+                "suggested_config": {"page_url": "https://town.example/events/list"},
+                "evidence": ["test"],
+                "caveats": [],
+            },
+            discovered_url="https://town.example/events/list",
+            html_for_title="<title>Town events</title>",
+            method="heuristic",
+        )
+        self.assertTrue(out["save_ready"])
+        self.assertEqual(out["source_label"], "Town events")
+        self.assertIn("town", out["source_key"])
 
 
 if __name__ == "__main__":

@@ -65,6 +65,7 @@ from .repository import (
     set_all_websites_enabled,
     update_event_review,
 )
+from .source_discovery import discover_source_proposal
 from .source_validation import validate_website_type_and_config
 from .website_config_schema import website_source_types_payload
 
@@ -502,6 +503,31 @@ class WebsiteCreateBody(BaseModel):
     enabled: bool = False
 
 
+class SourceDiscoveryBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=1, max_length=2048)
+    source_key: str | None = Field(default=None, max_length=120)
+    source_label: str | None = Field(default=None, max_length=200)
+    use_llm: bool = True
+
+
+class SourceDiscoveryResponse(BaseModel):
+    recommended_type: str
+    confidence: float
+    suggested_config: dict[str, Any]
+    source_key: str
+    source_label: str
+    evidence: list[str]
+    caveats: list[str]
+    method: str
+    save_ready: bool
+    validation_error: str | None = None
+    discovered_url: str
+    fallback_type: str | None = None
+    fallback_config: dict[str, Any] | None = None
+
+
 class CrawlJobAccepted(BaseModel):
     job_id: int
     status: str = "queued"
@@ -921,6 +947,34 @@ def api_website_source_types(
 ) -> list[dict[str, Any]]:
     _ = user
     return website_source_types_payload()
+
+
+@app.post("/api/source-discovery", response_model=SourceDiscoveryResponse)
+def api_source_discovery(
+    request: Request,
+    body: SourceDiscoveryBody,
+    user: Annotated[dict[str, Any], Depends(require_user)],
+) -> SourceDiscoveryResponse:
+    _ = user
+    _require_writes_allowed(request)
+    sk = (body.source_key or "").strip() or None
+    sl = (body.source_label or "").strip() or None
+    try:
+        out = discover_source_proposal(
+            body.url.strip(),
+            use_llm=body.use_llm,
+            source_key=sk,
+            source_label=sl,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except Exception as e:
+        log.warning("source-discovery failed: %s", e)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not complete discovery: {e}",
+        ) from e
+    return SourceDiscoveryResponse.model_validate(out)
 
 
 @app.get("/api/websites", response_model=list[WebsiteRow])
