@@ -185,8 +185,8 @@ def _main_sync_websites(argv: list[str]) -> int:
 def _main_run(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         description="Discover public Burlington-area events for campaign triage (review-only).",
-        epilog="Other commands: discover-source, sync-websites, create-account, create-user "
-        "(see --help on each).",
+        epilog="Other commands: discover-source, sync-websites, create-account, create-user, "
+        "daily-brief, automation-run, cron-run (see --help on each).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -394,6 +394,18 @@ def _main_create_user(argv: list[str]) -> int:
     return 0
 
 
+def _main_daily_brief(argv: list[str]) -> int:
+    from .automation_cli import main_daily_brief
+
+    return main_daily_brief(argv)
+
+
+def _main_automation_run(argv: list[str]) -> int:
+    from .automation_cli import main_automation_run
+
+    return main_automation_run(argv)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "discover-source":
@@ -404,4 +416,12 @@ def main(argv: list[str] | None = None) -> int:
         return _main_create_account(argv[1:])
     if argv and argv[0] == "create-user":
         return _main_create_user(argv[1:])
+    if argv and argv[0] == "daily-brief":
+        return _main_daily_brief(argv[1:])
+    if argv and argv[0] == "automation-run":
+        return _main_automation_run(argv[1:])
+    if argv and argv[0] == "cron-run":
+        from .cron_run import main as cron_main
+
+        return cron_main(argv[1:])
     return _main_run(argv)

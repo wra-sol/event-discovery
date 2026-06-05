@@ -185,6 +185,8 @@ class EventListFilters:
     """relevance | start_at | title | source | reviewed."""
     order: str | None = None
     """asc | desc; None uses a sensible default per sort key."""
+    first_seen_since_utc: str | None = None
+    """ISO8601 UTC lower bound for first_seen_at (automation: newly discovered events)."""
 
 
 def _events_where_clause(filters: EventListFilters) -> tuple[str, list[Any]]:
@@ -223,6 +225,9 @@ def _events_where_clause(filters: EventListFilters) -> tuple[str, list[Any]]:
         if filters.start_to:
             conditions.append("substr(start_at, 1, 10) <= ?")
             params.append(filters.start_to.strip()[:10])
+    if filters.first_seen_since_utc:
+        conditions.append("first_seen_at >= ?")
+        params.append(filters.first_seen_since_utc.strip())
     if not filters.include_past:
         raw = (filters.as_of_date or "").strip()[:10]
         if len(raw) == 10 and raw[4] == "-" and raw[7] == "-":

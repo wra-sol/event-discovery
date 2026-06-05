@@ -28,6 +28,8 @@ Background jobs run inside the web process and use the **same** mounted volume a
 
 Option A: External HTTPS cron calling `POST /api/crawl-jobs` with `EVENTS_CRAWL_API_TOKEN` and `X-Crawl-Account-Id` (see [README.md](../README.md)).
 
+Option A2: Railway cron service running `python -m event_discovery cron-run` — crawl + daily brief webhook delivery ([docs/CRON.md](CRON.md)).
+
 Option B: CLI / worker sharing the same filesystem as production (advanced).
 
 ## Auth backend decision

@@ -214,6 +214,27 @@
           </details>
         </form>
 
+        <form id="briefWebhooksForm" class="discovery-prefs card-like">
+          <h2 class="discovery-prefs-heading">Daily brief webhooks</h2>
+          <p class="discovery-prefs-lede">
+            When scheduled automation runs, the daily brief is POSTed to each enabled URL below
+            (Slack incoming webhooks and generic JSON endpoints). Configure one or more destinations
+            for your account.
+          </p>
+          <div id="briefWebhooksList" class="brief-webhooks-list" aria-live="polite"></div>
+          <div class="brief-webhooks-toolbar">
+            <button type="button" class="btn secondary" id="briefWebhookAdd">Add destination</button>
+          </div>
+          <label class="review-toggle discovery-prefs-toggle">
+            <input type="checkbox" id="briefWebhookSkipEmpty" name="skip_if_empty" />
+            <span>Skip webhook delivery when there are no pending brief items</span>
+          </label>
+          <p id="briefWebhooksError" class="site-config-error" role="alert" hidden></p>
+          <div class="discovery-prefs-actions">
+            <button type="submit" class="btn" id="briefWebhooksSave">Save webhooks</button>
+          </div>
+        </form>
+
         <div class="sites-toolbar" role="group" aria-label="Site list actions">
           <button type="button" class="btn" id="btnAddSource">Add source</button>
           <button type="button" class="btn secondary" id="btnRunFullCrawl">Run full crawl</button>

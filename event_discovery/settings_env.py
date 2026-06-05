@@ -37,3 +37,9 @@ def crawl_api_token() -> str | None:
     """Shared secret for machine-to-machine crawl API (Bearer); None if unset."""
     t = (os.environ.get("EVENTS_CRAWL_API_TOKEN") or "").strip()
     return t or None
+
+
+def agent_api_token() -> str | None:
+    """Shared secret for account-scoped agent API access (Bearer); None if unset."""
+    t = (os.environ.get("EVENTS_AGENT_API_TOKEN") or "").strip()
+    return t or None

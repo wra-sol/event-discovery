@@ -31,6 +31,7 @@ from .auth_db import (
 from .crawl_runner import start_crawl_job
 from .rate_limit import check_rate_limit, client_key
 from .settings_env import (
+    agent_api_token,
     allow_ephemeral_session_secret,
     cors_allow_origins,
     crawl_api_token,
@@ -237,7 +238,8 @@ async def lifespan(app: FastAPI):
         apply_auth_migrations(auth_path)
         app.state.auth_db_path = auth_path
         log.info("Auth backend: SQLite at %s", auth_path)
-    app.state.prepared_account_dbs: set[int] = set()
+    prepared_account_dbs: set[int] = set()
+    app.state.prepared_account_dbs = prepared_account_dbs
     if _auth_disabled():
         db_path = account_discovery_db_path(data_root, 1, cfg=cfg)
         migrate_database_only(
@@ -357,6 +359,76 @@ def require_user_or_crawl_api(request: Request) -> dict[str, Any]:
     return require_user(request)
 
 
+def _account_id_from_header(request: Request, header_name: str) -> int:
+    raw_account = (request.headers.get(header_name) or "").strip()
+    if not raw_account.isdigit():
+        raise HTTPException(
+            status_code=400,
+            detail=f"{header_name} must be a positive integer account id",
+        )
+    account_id = int(raw_account)
+    if account_id < 1:
+        raise HTTPException(status_code=400, detail=f"{header_name} must be >= 1")
+    return account_id
+
+
+def _agent_api_user_from_bearer(request: Request) -> dict[str, Any] | None:
+    auth_header = (request.headers.get("Authorization") or "").strip()
+    if not auth_header.lower().startswith("bearer "):
+        return None
+    configured = agent_api_token()
+    got = auth_header[7:].strip()
+    if not configured:
+        raise HTTPException(
+            status_code=503,
+            detail="Agent API token is not configured (EVENTS_AGENT_API_TOKEN)",
+        )
+    if not _timing_safe_equal_str(configured, got):
+        raise HTTPException(status_code=401, detail="Invalid agent API token")
+    account_id = _account_id_from_header(request, "X-Agent-Account-Id")
+    log.info("Agent API token auth for account_id=%s", account_id)
+    return {"id": 0, "account_id": account_id, "email": "agent-api@internal"}
+
+
+def require_user_or_agent_api(request: Request) -> dict[str, Any]:
+    """
+    Session user, or Bearer EVENTS_AGENT_API_TOKEN with X-Agent-Account-Id.
+    This broader machine credential is intended for agents managing sources/settings.
+    """
+    if _auth_disabled():
+        return require_user(request)
+
+    agent_user = _agent_api_user_from_bearer(request)
+    if agent_user is not None:
+        return agent_user
+
+    return require_user(request)
+
+
+def require_user_or_agent_or_crawl_api(request: Request) -> dict[str, Any]:
+    """Automation run accepts both broad agent tokens and narrow crawl tokens."""
+    if _auth_disabled():
+        return require_user(request)
+    auth_header = (request.headers.get("Authorization") or "").strip()
+    if auth_header.lower().startswith("bearer "):
+        got = auth_header[7:].strip()
+        configured_agent = agent_api_token()
+        if configured_agent and _timing_safe_equal_str(configured_agent, got):
+            account_id = _account_id_from_header(request, "X-Agent-Account-Id")
+            return {"id": 0, "account_id": account_id, "email": "agent-api@internal"}
+        configured_crawl = crawl_api_token()
+        if configured_crawl and _timing_safe_equal_str(configured_crawl, got):
+            account_id = _account_id_from_header(request, "X-Crawl-Account-Id")
+            return {"id": 0, "account_id": account_id, "email": "crawl-api@internal"}
+        if configured_agent is None and configured_crawl is None:
+            raise HTTPException(
+                status_code=503,
+                detail="No agent or crawl API token is configured",
+            )
+        raise HTTPException(status_code=401, detail="Invalid API token")
+    return require_user(request)
+
+
 def ensure_account_db_ready(request: Request, account_id: int) -> Path:
     aid = int(account_id)
     prepared: set[int] = request.app.state.prepared_account_dbs
@@ -392,6 +464,19 @@ def get_db_crawl(
     user: Annotated[dict[str, Any], Depends(require_user_or_crawl_api)],
 ) -> Generator[Connection, None, None]:
     """Like get_db but allows machine Bearer token for crawl job routes."""
+    db_path = ensure_account_db_ready(request, int(user["account_id"]))
+    conn = open_connection(db_path)
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def get_db_agent(
+    request: Request,
+    user: Annotated[dict[str, Any], Depends(require_user_or_agent_api)],
+) -> Generator[Connection, None, None]:
+    """Like get_db but allows the broader agent Bearer token for source/settings routes."""
     db_path = ensure_account_db_ready(request, int(user["account_id"]))
     conn = open_connection(db_path)
     try:
@@ -884,8 +969,8 @@ def api_sources(
 
 @app.get("/api/discovery-settings", response_model=DiscoverySettingsResponse)
 def api_discovery_settings_get(
-    conn: Annotated[Connection, Depends(get_db)],
-    user: Annotated[dict[str, Any], Depends(require_user)],
+    conn: Annotated[Connection, Depends(get_db_agent)],
+    user: Annotated[dict[str, Any], Depends(require_user_or_agent_api)],
 ) -> DiscoverySettingsResponse:
     _ = user
     return _bundle_to_discovery_response(conn)
@@ -895,8 +980,8 @@ def api_discovery_settings_get(
 def api_discovery_settings_patch(
     request: Request,
     body: DiscoverySettingsPatch,
-    conn: Annotated[Connection, Depends(get_db)],
-    user: Annotated[dict[str, Any], Depends(require_user)],
+    conn: Annotated[Connection, Depends(get_db_agent)],
+    user: Annotated[dict[str, Any], Depends(require_user_or_agent_api)],
 ) -> DiscoverySettingsResponse:
     _ = user
     _require_writes_allowed(request)
@@ -965,7 +1050,7 @@ def api_discovery_settings_patch(
 
 @app.get("/api/website-source-types")
 def api_website_source_types(
-    user: Annotated[dict[str, Any], Depends(require_user)],
+    user: Annotated[dict[str, Any], Depends(require_user_or_agent_api)],
 ) -> list[dict[str, Any]]:
     _ = user
     return website_source_types_payload()
@@ -975,7 +1060,7 @@ def api_website_source_types(
 def api_source_discovery(
     request: Request,
     body: SourceDiscoveryBody,
-    user: Annotated[dict[str, Any], Depends(require_user)],
+    user: Annotated[dict[str, Any], Depends(require_user_or_agent_api)],
 ) -> SourceDiscoveryResponse:
     _ = user
     _require_writes_allowed(request)
@@ -1003,8 +1088,8 @@ def api_source_discovery(
 def api_website_quick_add(
     request: Request,
     body: WebsiteQuickAddBody,
-    conn: Annotated[Connection, Depends(get_db)],
-    user: Annotated[dict[str, Any], Depends(require_user)],
+    conn: Annotated[Connection, Depends(get_db_agent)],
+    user: Annotated[dict[str, Any], Depends(require_user_or_agent_api)],
 ) -> WebsiteQuickAddResponse:
     """
     Add a source from a display name and URL only: run discovery (rules, then optional AI),
@@ -1060,8 +1145,8 @@ def api_website_quick_add(
 
 @app.get("/api/websites", response_model=list[WebsiteRow])
 def api_list_websites(
-    conn: Annotated[Connection, Depends(get_db)],
-    user: Annotated[dict[str, Any], Depends(require_user)],
+    conn: Annotated[Connection, Depends(get_db_agent)],
+    user: Annotated[dict[str, Any], Depends(require_user_or_agent_api)],
 ) -> list[WebsiteRow]:
     _ = user
     rows = list_websites(conn)
@@ -1072,8 +1157,8 @@ def api_list_websites(
 def api_create_website(
     request: Request,
     body: WebsiteCreateBody,
-    conn: Annotated[Connection, Depends(get_db)],
-    user: Annotated[dict[str, Any], Depends(require_user)],
+    conn: Annotated[Connection, Depends(get_db_agent)],
+    user: Annotated[dict[str, Any], Depends(require_user_or_agent_api)],
 ) -> WebsiteRow:
     _ = user
     _require_writes_allowed(request)
@@ -1103,8 +1188,8 @@ def api_create_website(
 def api_websites_bulk_enabled(
     request: Request,
     body: WebsitesBulkEnabledBody,
-    conn: Annotated[Connection, Depends(get_db)],
-    user: Annotated[dict[str, Any], Depends(require_user)],
+    conn: Annotated[Connection, Depends(get_db_agent)],
+    user: Annotated[dict[str, Any], Depends(require_user_or_agent_api)],
 ) -> list[WebsiteRow]:
     _ = user
     _require_writes_allowed(request)
@@ -1118,8 +1203,8 @@ def api_patch_website(
     request: Request,
     website_id: int,
     body: WebsitePatch,
-    conn: Annotated[Connection, Depends(get_db)],
-    user: Annotated[dict[str, Any], Depends(require_user)],
+    conn: Annotated[Connection, Depends(get_db_agent)],
+    user: Annotated[dict[str, Any], Depends(require_user_or_agent_api)],
 ) -> Any:
     _ = user
     _require_writes_allowed(request)
@@ -1175,8 +1260,8 @@ def api_patch_website(
 def api_delete_website(
     request: Request,
     website_id: int,
-    conn: Annotated[Connection, Depends(get_db)],
-    user: Annotated[dict[str, Any], Depends(require_user)],
+    conn: Annotated[Connection, Depends(get_db_agent)],
+    user: Annotated[dict[str, Any], Depends(require_user_or_agent_api)],
     delete_events: bool = False,
 ) -> WebsiteDeleteResponse:
     _ = user
@@ -1191,8 +1276,8 @@ def api_delete_website(
 def api_reorder_websites(
     request: Request,
     body: WebsiteReorderBody,
-    conn: Annotated[Connection, Depends(get_db)],
-    user: Annotated[dict[str, Any], Depends(require_user)],
+    conn: Annotated[Connection, Depends(get_db_agent)],
+    user: Annotated[dict[str, Any], Depends(require_user_or_agent_api)],
 ) -> Any:
     _ = user
     _require_writes_allowed(request)
@@ -1208,7 +1293,7 @@ def api_reorder_websites(
 def api_test_website(
     request: Request,
     website_id: int,
-    user: Annotated[dict[str, Any], Depends(require_user)],
+    user: Annotated[dict[str, Any], Depends(require_user_or_agent_api)],
 ) -> dict[str, Any]:
     _ = user
     _require_writes_allowed(request)
@@ -1394,6 +1479,11 @@ def api_patch_review(
     if result is None:
         raise HTTPException(status_code=404, detail="Event not found")
     return ReviewState.model_validate(result)
+
+
+from .automation_api import register_automation_routes
+
+register_automation_routes(app)
 
 
 if STATIC_DIR.is_dir():

@@ -1,0 +1,87 @@
+# Campaign profile + Burlington-area sources for daily automation.
+# Point EVENT_DISCOVERY_CONFIG at this file on deploy, then:
+#   uv run python -m event_discovery sync-websites --config event_discovery/config.campaign.example.yaml
+#
+# Tweak `campaign:` for geography, scoring thresholds, and outreach wording.
+# Tweak `scoring:` keywords for ward/region focus without changing code.
+# Tweak `sources:` to add/remove crawl targets.
+
+campaign:
+  display_name: "Campaign team"
+  geography_label: "Burlington, Ontario"
+  timezone: "America/Toronto"
+  brief:
+    min_score: 1.0
+    max_items: 15
+    include_past: false
+    days_ahead: 45
+    # Set to null to include all pending (not just newly discovered).
+    only_new_since_hours: 168
+  outreach:
+    candidate_contact_label: "the candidate"
+    calendar_name: "Campaign events"
+    briefing_notes: |
+      Prioritize local, resident-facing, community events (handbook §14).
+      Ward-specific events score higher in the default rubric.
+
+scoring:
+  positive_keywords:
+    - Burlington
+    - Halton
+    - community
+    - festival
+    - farmers market
+    - neighbourhood
+    - neighborhood
+    - town hall
+    - ward
+    - library
+    - park
+  ward_keywords:
+    - Ward 6
+    - ward 6
+  negative_keywords:
+    - bootcamp
+    - certification exam
+    - corporate training
+    - professional training
+
+sources:
+
+  tourism:
+    enabled: true
+    type: tribe_rest
+    rest_url: "https://tourismburlington.ca/wp-json/tribe/events/v1/events"
+    per_page: 50
+    max_pages: 4
+
+  downtown:
+    enabled: true
+    type: tribe_rest
+    rest_url: "https://burlingtondowntown.ca/wp-json/tribe/events/v1/events"
+    per_page: 50
+    max_pages: 4
+
+  city_events:
+    enabled: true
+    type: burlington_events_ldjson
+    page_url: "https://events.burlington.ca/"
+
+  spaces:
+    enabled: true
+    type: spaces_fragment
+    base_url: "https://burlington.spaces.ca"
+    endpoint: "/posts/eventsbysite"
+    max_pages: 8
+
+  eventbrite:
+    enabled: true
+    type: eventbrite_listing
+    listing_urls:
+      - "https://www.eventbrite.ca/d/canada--burlington/events--this-week/"
+      - "https://www.eventbrite.ca/d/canada--burlington/events--today/"
+
+  looklocal:
+    enabled: true
+    type: looklocal_page
+    page_url: "https://looklocal.ca/local-community-events/"

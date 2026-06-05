@@ -66,6 +66,13 @@ scoring:
 
 sources: {}
 
+# Optional campaign profile for daily automation briefs (see docs/AUTOMATION.md).
+# campaign:
+#   geography_label: "Burlington, Ontario"
+#   brief:
+#     min_score: 1.0
+#     days_ahead: 45
+
 database:
   # SQLite file path = OUTPUT_DIR / filename unless DISCOVERY_DB_PATH is set (absolute path).
   filename: discovery.db

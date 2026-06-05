@@ -1,0 +1,11 @@
+# Reference config for a separate Railway cron service (event-discovery-cron).
+# Deploy as a second service in the same project — NO volume on this service.
+#
+# Cron schedule: set in Railway dashboard (Settings → Cron Schedule), not here.
+# See docs/CRON.md for setup steps and env vars.
+
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "python -m event_discovery cron-run"

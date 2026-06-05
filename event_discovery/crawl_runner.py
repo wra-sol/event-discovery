@@ -74,6 +74,14 @@ def start_crawl_job(
                 "event_count": len(events),
                 "top_titles": [e.title for e in events[:8]],
             }
+            try:
+                from .daily_brief import build_daily_brief
+
+                brief = build_daily_brief(conn, config_path=cfg_path)
+                summary["brief_pending_count"] = brief.pending_count
+                summary["brief_top_titles"] = [i.title for i in brief.items[:5]]
+            except Exception:
+                log.exception("could not attach daily brief to crawl summary")
             update_crawl_job(
                 conn,
                 job_id,

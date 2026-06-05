@@ -21,6 +21,12 @@ const els = {
   discoveryPrefsForm: document.getElementById("discoveryPrefsForm"),
   discoveryPrefsSave: document.getElementById("discoveryPrefsSave"),
   discoveryPrefsError: document.getElementById("discoveryPrefsError"),
+  briefWebhooksForm: document.getElementById("briefWebhooksForm"),
+  briefWebhooksList: document.getElementById("briefWebhooksList"),
+  briefWebhookAdd: document.getElementById("briefWebhookAdd"),
+  briefWebhookSkipEmpty: document.getElementById("briefWebhookSkipEmpty"),
+  briefWebhooksSave: document.getElementById("briefWebhooksSave"),
+  briefWebhooksError: document.getElementById("briefWebhooksError"),
   discPositive: document.getElementById("discPositive"),
   discWard: document.getElementById("discWard"),
   discNegative: document.getElementById("discNegative"),
@@ -259,6 +265,7 @@ function showPanel(name) {
   if (name === "sites") {
     void loadSites();
     void loadDiscoveryPrefs();
+    void loadBriefWebhooks();
   }
   if (name === "calendar") loadCalendarMonth();
   if (name === "review") loadReviewEvents();
@@ -334,6 +341,9 @@ function refreshReadOnlyFormState() {
     if (el) el.disabled = ro;
   }
   if (els.discoveryPrefsSave) els.discoveryPrefsSave.disabled = ro;
+  if (els.briefWebhooksSave) els.briefWebhooksSave.disabled = ro;
+  if (els.briefWebhookAdd) els.briefWebhookAdd.disabled = ro;
+  if (els.briefWebhookSkipEmpty) els.briefWebhookSkipEmpty.disabled = ro;
   if (els.sitePrefReset) els.sitePrefReset.disabled = ro;
   if (els.sitesCheckAll) els.sitesCheckAll.disabled = ro;
   if (els.sitesUncheckAll) els.sitesUncheckAll.disabled = ro;
@@ -542,6 +552,138 @@ async function submitDiscoveryPrefs(ev) {
     setDiscoveryPrefsError(e.message || "Save failed.");
   } finally {
     els.discoveryPrefsSave.disabled = false;
+  }
+}
+
+let briefWebhookDraft = [];
+
+function setBriefWebhooksError(msg) {
+  if (!els.briefWebhooksError) return;
+  if (!msg) {
+    els.briefWebhooksError.hidden = true;
+    els.briefWebhooksError.textContent = "";
+    return;
+  }
+  els.briefWebhooksError.hidden = false;
+  els.briefWebhooksError.textContent = msg;
+}
+
+function renderBriefWebhookRows() {
+  if (!els.briefWebhooksList) return;
+  els.briefWebhooksList.replaceChildren();
+  const ro = !writesAllowed();
+  for (const row of briefWebhookDraft) {
+    const wrap = document.createElement("div");
+    wrap.className = "brief-webhook-row";
+    wrap.dataset.webhookId = row.id;
+
+    const labelField = document.createElement("label");
+    labelField.className = "field";
+    const labelSpan = document.createElement("span");
+    labelSpan.textContent = "Label (optional)";
+    const labelInput = document.createElement("input");
+    labelInput.type = "text";
+    labelInput.value = row.label || "";
+    labelInput.placeholder = "e.g. Slack #campaign";
+    labelInput.disabled = ro;
+    labelInput.addEventListener("input", () => {
+      row.label = labelInput.value;
+    });
+    labelField.append(labelSpan, labelInput);
+
+    const urlField = document.createElement("label");
+    urlField.className = "field field-grow";
+    const urlSpan = document.createElement("span");
+    urlSpan.textContent = "Webhook URL";
+    const urlInput = document.createElement("input");
+    urlInput.type = "url";
+    urlInput.required = true;
+    urlInput.value = row.url || "";
+    urlInput.placeholder = "https://hooks.slack.com/services/…";
+    urlInput.autocomplete = "off";
+    urlInput.disabled = ro;
+    urlInput.addEventListener("input", () => {
+      row.url = urlInput.value;
+    });
+    urlField.append(urlSpan, urlInput);
+
+    const enabledLabel = document.createElement("label");
+    enabledLabel.className = "brief-webhook-enabled";
+    const enabledInput = document.createElement("input");
+    enabledInput.type = "checkbox";
+    enabledInput.checked = row.enabled !== false;
+    enabledInput.disabled = ro;
+    enabledInput.addEventListener("change", () => {
+      row.enabled = enabledInput.checked;
+    });
+    enabledLabel.append(enabledInput, document.createTextNode("Enabled"));
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "btn secondary";
+    removeBtn.textContent = "Remove";
+    removeBtn.disabled = ro;
+    removeBtn.addEventListener("click", () => {
+      briefWebhookDraft = briefWebhookDraft.filter((w) => w.id !== row.id);
+      renderBriefWebhookRows();
+    });
+
+    wrap.append(labelField, urlField, enabledLabel, removeBtn);
+    els.briefWebhooksList.append(wrap);
+  }
+}
+
+async function loadBriefWebhooks() {
+  if (!els.briefWebhooksForm) return;
+  setBriefWebhooksError("");
+  try {
+    const d = await fetchJson("/api/automation/delivery");
+    briefWebhookDraft = (d.webhooks || []).map((w) => ({
+      id: w.id || crypto.randomUUID(),
+      label: w.label || "",
+      url: w.url || "",
+      enabled: w.enabled !== false,
+    }));
+    if (els.briefWebhookSkipEmpty) {
+      els.briefWebhookSkipEmpty.checked = !!d.skip_if_empty;
+    }
+    renderBriefWebhookRows();
+  } catch (e) {
+    setBriefWebhooksError(e.message || "Could not load webhook settings.");
+  }
+}
+
+async function submitBriefWebhooks(ev) {
+  ev.preventDefault();
+  if (!writesAllowed() || !els.briefWebhooksForm) return;
+  setBriefWebhooksError("");
+  const body = {
+    webhooks: briefWebhookDraft.map((w) => ({
+      id: w.id,
+      label: (w.label || "").trim(),
+      url: (w.url || "").trim(),
+      enabled: w.enabled !== false,
+    })),
+    skip_if_empty: !!(els.briefWebhookSkipEmpty && els.briefWebhookSkipEmpty.checked),
+  };
+  try {
+    els.briefWebhooksSave.disabled = true;
+    const saved = await fetchJson("/api/automation/delivery", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    briefWebhookDraft = (saved.webhooks || []).map((w) => ({
+      id: w.id,
+      label: w.label || "",
+      url: w.url || "",
+      enabled: w.enabled !== false,
+    }));
+    renderBriefWebhookRows();
+    setStatus("Brief webhook destinations saved.");
+  } catch (e) {
+    setBriefWebhooksError(e.message || "Save failed.");
+  } finally {
+    els.briefWebhooksSave.disabled = false;
   }
 }
 
@@ -1128,6 +1270,21 @@ if (els.sitePrefReset) {
 }
 if (els.discoveryPrefsForm) {
   els.discoveryPrefsForm.addEventListener("submit", (ev) => void submitDiscoveryPrefs(ev));
+}
+if (els.briefWebhooksForm) {
+  els.briefWebhooksForm.addEventListener("submit", (ev) => void submitBriefWebhooks(ev));
+}
+if (els.briefWebhookAdd) {
+  els.briefWebhookAdd.addEventListener("click", () => {
+    if (!writesAllowed()) return;
+    briefWebhookDraft.push({
+      id: crypto.randomUUID(),
+      label: "",
+      url: "",
+      enabled: true,
+    });
+    renderBriefWebhookRows();
+  });
 }
 if (els.sitesCheckAll) {
   els.sitesCheckAll.addEventListener("click", () => void sitesBulkEnabled(true));
